@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LanSilence/haos-ace
-          ref: 1fcb5e87e86cf22015e46ffc53902fe83c5d1
+          ref: 1fcb5e87e86cf22015e46ffc53902fe83c5ed8d1
           submodules: recursive
           fetch-depth: 1
 
