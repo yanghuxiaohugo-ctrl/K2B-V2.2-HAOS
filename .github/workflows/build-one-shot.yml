@@ -1,0 +1,627 @@
+name: K2B-V2.2 one-shot full HAOS build (DDR3 DRAM + Maxio Ethernet)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GIT_TERMINAL_PROMPT: 0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout haos-ace @ 1fcb5e8 (exact 16.3 build commit, with submodules)
+        uses: actions/checkout@v4
+        with:
+          repository: LanSilence/haos-ace
+          ref: 1fcb5e87e86cf22015e46ffc53902fe83c5d1
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx (upstream CI recipe)
+        uses: docker/setup-buildx-action@v2
+
+      - name: Free up disk space (upstream CI recipe)
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /var/lib/apt/lists/* /var/cache/apt/archives/*
+          sudo rm -rf /var/cache/debconf/*-old /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo apt-get -qq clean -y
+          df -h /
+
+      - name: Customize for KICKPI K2B V2.2 (DDR3 + Maxio MAE0621 PHY)
+        run: |
+          python3 <<'PYEOF'
+          import os
+          BOARD = 'haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b'
+          LP = os.path.join(BOARD, 'patches', 'linux')
+
+          # ---------- 1) U-Boot board config: DDR3-1333 @648MHz + 1.5V VDD-DRAM ----------
+          # Replaces haos-ace board uboot.config (LPDDR4 @792, no DRAM voltage line).
+          # DRAM timings = Armbian kickpi_k2b_v2_defconfig (PR #10902, hardware-validated on V2.2).
+          # AXP_DCDC3_VOLT=1500 : u-boot-2025.01 AXP313 default is 1100 (LPDDR4) - DDR3 needs 1.5V.
+          # SPI group removed: V2.2 SPI NOR not confirmed; validated Armbian V2 config has no SPI.
+          uboot_cfg = "\n".join([
+          "CONFIG_ARM=y",
+          "CONFIG_ARCH_SUNXI=y",
+          "CONFIG_DEFAULT_DEVICE_TREE=\"allwinner/sun50i-h618-k2b\"",
+          "CONFIG_SPL=y",
+          "CONFIG_DRAM_SUN50I_H616_DX_ODT=0x03030303",
+          "CONFIG_DRAM_SUN50I_H616_DX_DRI=0x0e0e0e0e",
+          "CONFIG_DRAM_SUN50I_H616_CA_DRI=0x1f12",
+          "CONFIG_DRAM_SUN50I_H616_ODT_EN=0x0",
+          "CONFIG_DRAM_SUN50I_H616_TPR0=0xc0001002",
+          "CONFIG_DRAM_SUN50I_H616_TPR2=0x0000",
+          "CONFIG_DRAM_SUN50I_H616_TPR6=0x33808080",
+          "CONFIG_DRAM_SUN50I_H616_TPR10=0x2f1107",
+          "CONFIG_DRAM_SUN50I_H616_TPR11=0xddddcccc",
+          "CONFIG_DRAM_SUN50I_H616_TPR12=0xeddc7665",
+          "CONFIG_MACH_SUN50I_H616=y",
+          "CONFIG_SUNXI_DRAM_H616_DDR3_1333=y",
+          "CONFIG_DRAM_CLK=648",
+          "CONFIG_R_I2C_ENABLE=y",
+          "# CONFIG_SYS_MALLOC_CLEAR_ON_INIT is not set",
+          "CONFIG_SPL_I2C=y",
+          "CONFIG_SPL_SYS_I2C_LEGACY=y",
+          "CONFIG_SYS_I2C_MVTWSI=y",
+          "CONFIG_SYS_I2C_SLAVE=0x7f",
+          "CONFIG_SYS_I2C_SPEED=400000",
+          "CONFIG_AXP313_POWER=y",
+          "CONFIG_AXP_DCDC3_VOLT=1500",
+          "CONFIG_CMD_EXT2=y",
+          "CONFIG_CMD_EXT4=y",
+          "# CONFIG_CMD_EXT4_WRITE is not set",
+          "CONFIG_CMD_FAT=y",
+          "CONFIG_CMD_FILEENV=y",
+          "CONFIG_CMD_SQUASHFS=y",
+          "CONFIG_CMD_FS_GENERIC=y",
+          "CONFIG_FS_SQUASHFS=y",
+          "CONFIG_LZ4=y",
+          "CONFIG_LZMA=y",
+          "CONFIG_LZO=y",
+          "CONFIG_GZIP=y",
+          "CONFIG_ZLIB_UNCOMPRESS=y",
+          "# CONFIG_BZIP2 is not set",
+          "CONFIG_ZLIB=y",
+          "CONFIG_DOS_PARTITION=y",
+          "CONFIG_MMC_SUNXI_SLOT_EXTRA=2",
+          "CONFIG_SUPPORT_EMMC_BOOT=y",
+          "CONFIG_USB_EHCI_HCD=y",
+          "CONFIG_USB_OHCI_HCD=y",
+          "CONFIG_USB_MUSB_GADGET=y",
+          "# CONFIG_EFI_LOADER is not set",
+          ]) + "\n"
+          open(os.path.join(BOARD, 'uboot.config'), 'w').write(uboot_cfg)
+
+          # ---------- 2) Kernel patch 005: V2.2 Ethernet DTS ----------
+          # PHY addr 1->0, add PHY nRST on PI6, rx-delay 2300->2000ps, free PI6 from
+          # the V1 USB-VBUS role, drop phy-supply. Matches the Armbian V2 DTS
+          # (PR #10894). Contexts byte-verified against the DTS state produced by
+          # haos-ace linux patches 002+003 (kernel 6.12.35 tree).
+          p005 = "\n".join([
+          "diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
+          "--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
+          "+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
+          "@@ -60,8 +60,8 @@",
+          " &emac0 {",
+          " \tpinctrl-names = \"default\";",
+          " \tpinctrl-0 = <&ext_rgmii_pins>;",
+          " \tphy-handle = <&ext_rgmii_phy>;",
+          "-\tallwinner,rx-delay-ps = <2300>;",
+          "+\tallwinner,rx-delay-ps = <2000>;",
+          " \tallwinner,tx-delay-ps = <700>;",
+          " \tphy-mode = \"rgmii\";",
+          " \tstatus = \"okay\";",
+          "@@ -64,6 +64,9 @@",
+          " &mdio0 {",
+          "-\text_rgmii_phy: ethernet-phy@1 {",
+          "+\text_rgmii_phy: ethernet-phy@0 {",
+          " \t\tcompatible = \"ethernet-phy-ieee802.3-c22\";",
+          "-\t\treg = <1>;",
+          "+\t\treg = <0>;",
+          "+\t\treset-assert-us = <20000>;",
+          "+\t\treset-deassert-us = <100000>;",
+          "+\t\treset-gpios = <&pio 8 6 GPIO_ACTIVE_LOW>; /* PI6, PHY nRST on K2B V2.2 */",
+          " \t};",
+          " };",
+          "@@ -40,10 +40,8 @@",
+          " \treg_usb1_vbus: regulator-usb1-vbus {",
+          " \t\tcompatible = \"regulator-fixed\";",
+          " \t\tregulator-name = \"usb1-vbus\";",
+          " \t\tregulator-min-microvolt = <5000000>;",
+          " \t\tregulator-max-microvolt = <5000000>;",
+          " \t\tvin-supply = <&reg_vcc5v>;",
+          "-\t\tenable-active-high;",
+          "-\t\tgpio = <&pio 8 6 GPIO_ACTIVE_HIGH>; /* PI6 */",
+          " \t};",
+          " };",
+          "diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
+          "--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
+          "+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
+          "@@ -70,8 +70,7 @@",
+          " &emac0 {",
+          " \tpinctrl-names = \"default\";",
+          " \tphy-mode = \"rgmii\";",
+          " \tpinctrl-0 = <&ext_rgmii_pins>;",
+          " \tphy-handle = <&ext_rgmii_phy>;",
+          "-\tphy-supply = <&reg_vcc3v3>;",
+          " \tstatus = \"okay\";",
+          " };",
+          ]) + "\n"
+          open(os.path.join(LP, '005-k2b-v2-eth-dts.patch'), 'w').write(p005)
+
+          # ---------- 3) Kernel patch 006: Maxio MAE0621A-Q2C PHY driver ----------
+          # Driver from Armbian PR #10894 (KickPi K2B V2). Kconfig/Makefile hunks
+          # re-anchored against linux v6.12 (byte-verified: Kconfig L255-263,
+          # Makefile L74-78). stmmac_main.c hook from the same PR is NOT needed on
+          # 6.12: __stmmac_open calls stmmac_init_phy() (L3942) BEFORE
+          # stmmac_hw_setup() (L3971), so the Maxio probe clk-mode write already
+          # runs before the first DMA reset. Only the Q2C part (PHY ID 0x7b744411)
+          # is shipped; Q3C variants omitted.
+          maxio_c = "\n".join([
+          "// SPDX-License-Identifier: GPL-2.0+",
+          "/* Driver for Maxio PHYs - ported from Armbian PR #10894 (KickPi K2B V2) */",
+          "#include <linux/bitops.h>",
+          "#include <linux/phy.h>",
+          "#include <linux/module.h>",
+          "#include <linux/delay.h>",
+          "#include <linux/device.h>",
+          "#include <linux/mdio.h>",
+          "#include <linux/timer.h>",
+          "#include <linux/netdevice.h>",
+          "#include <linux/version.h>",
+          "",
+          "#define MAXIO_PHY_VER                  \"v1.8.1.13\"",
+          "#define MAXIO_PAGE_SELECT              0x1f",
+          "#define MAXIO_MAE0621A_WORK_STATUS_REG 0x1d",
+          "#define MAXIO_MAE0621A_CLK_MODE_REG    0x02",
+          "",
+          "#define MAXIO_PHYSR_P_A43  (0X1A)",
+          "#define MAXIO_PHY_LINK     (1<<2)",
+          "#define MAXIO_PHY_DUPLEX   (1<<3)",
+          "#define MAXIO_PHY_SPEED    (3<<4)",
+          "#define MAXIO_PHY_1000M    (0X20)",
+          "#define MAXIO_PHY_100M     (0X10)",
+          "#define MAXIO_PHY_10M      (0X00)",
+          "",
+          "#define AUTONEG_COMPLETED_INT_EN (0x8)",
+          "#define LINKOK                   (0x4)",
+          "#define AUTONEG_COMPLETED        (0x8)",
+          "",
+          "#define PHY_READ(a,b)    phy_read((a),(b))",
+          "#define PHY_WRITE(a,b,c) phy_write((a),(b),(c))",
+          "",
+          "static int maxio_read_paged(struct phy_device *phydev, int page, u32 regnum)",
+          "{",
+          "        int ret = 0, oldpage, sel;",
+          "",
+          "        oldpage = PHY_READ(phydev, MAXIO_PAGE_SELECT);",
+          "        if (oldpage < 0)",
+          "                return oldpage;",
+          "",
+          "        sel = PHY_WRITE(phydev, MAXIO_PAGE_SELECT, page);",
+          "        if (sel < 0)",
+          "                return sel;",
+          "",
+          "        ret = PHY_READ(phydev, regnum);",
+          "",
+          "        sel = PHY_WRITE(phydev, MAXIO_PAGE_SELECT, oldpage);",
+          "        if (ret >= 0 && sel < 0)",
+          "                ret = sel;",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_write_paged(struct phy_device *phydev, int page, u32 regnum, u16 val)",
+          "{",
+          "        int ret = 0, oldpage, sel;",
+          "",
+          "        oldpage = PHY_READ(phydev, MAXIO_PAGE_SELECT);",
+          "        if (oldpage < 0)",
+          "                return oldpage;",
+          "",
+          "        sel = PHY_WRITE(phydev, MAXIO_PAGE_SELECT, page);",
+          "        if (sel < 0)",
+          "                return sel;",
+          "",
+          "        ret = PHY_WRITE(phydev, regnum, val);",
+          "",
+          "        sel = PHY_WRITE(phydev, MAXIO_PAGE_SELECT, oldpage);",
+          "        if (ret >= 0 && sel < 0)",
+          "                ret = sel;",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_adcc_check(struct phy_device *phydev)",
+          "{",
+          "        int ret = 0;",
+          "        int adcvalue;",
+          "        u32 regval;",
+          "        int i;",
+          "",
+          "        maxio_write_paged(phydev, 0xd96, 0x2, 0x1fff );",
+          "        maxio_write_paged(phydev, 0xd96, 0x2, 0x1000 );",
+          "",
+          "        for (i = 0; i < 4; i++) {",
+          "                regval = 0xf908 + i * 0x100;",
+          "                maxio_write_paged(phydev, 0xd8f, 0xb, regval );",
+          "                adcvalue = maxio_read_paged(phydev, 0xd92, 0xb);",
+          "                if (adcvalue < 0) {",
+          "                        ret = adcvalue;",
+          "                        break;",
+          "                }",
+          "                if (adcvalue & 0x1ff) {",
+          "                        continue;",
+          "                } else {",
+          "                        ret = -1;",
+          "                        break;",
+          "                }",
+          "        }",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_self_check(struct phy_device *phydev, int checknum)",
+          "{",
+          "        int ret = 0;",
+          "        int i;",
+          "",
+          "        for (i = 0; i < checknum; i++) {",
+          "                ret = maxio_adcc_check(phydev);",
+          "                if (0 == ret) {",
+          "                        printk(\"MAE0621A READY\\n\");",
+          "                        break;",
+          "                } else {",
+          "                        maxio_write_paged(phydev, 0x0, 0x0, 0x1940 );",
+          "                        PHY_WRITE(phydev, MAXIO_PAGE_SELECT, 0x0);",
+          "                        msleep(10);",
+          "                        maxio_write_paged(phydev, 0x0, 0x0, 0x1140 );",
+          "                        maxio_write_paged(phydev, 0x0, 0x0, 0x9140 );",
+          "                }",
+          "        }",
+          "",
+          "        maxio_write_paged(phydev, 0xd96, 0x2, 0xfff );",
+          "        maxio_write_paged(phydev, 0x0, 0x0, 0x9140 );",
+          "        PHY_WRITE(phydev, MAXIO_PAGE_SELECT, 0x0);",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_mae0621a_resume(struct phy_device *phydev)",
+          "{",
+          "        int ret;",
+          "",
+          "        ret = genphy_resume(phydev);",
+          "",
+          "        ret |= PHY_WRITE(phydev, MII_BMCR, BMCR_RESET | PHY_READ(phydev, MII_BMCR));",
+          "        msleep(20);",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_mae0621a_suspend(struct phy_device *phydev)",
+          "{",
+          "        int ret = 0;",
+          "",
+          "        ret = genphy_suspend(phydev);",
+          "        ret |= PHY_WRITE(phydev, MAXIO_PAGE_SELECT ,0);",
+          "",
+          "        return ret;",
+          "}",
+          "",
+          "static int maxio_restart_aneg(struct phy_device *phydev)",
+          "{",
+          "        int ctl = PHY_READ(phydev, MII_BMCR);",
+          "",
+          "        if (ctl < 0)",
+          "                return ctl;",
+          "",
+          "        ctl |= BMCR_ANENABLE | BMCR_ANRESTART;",
+          "",
+          "        ctl &= ~BMCR_ISOLATE;",
+          "",
+          "        return PHY_WRITE(phydev, MII_BMCR, ctl);",
+          "}",
+          "",
+          "static void phy_resolve_aneg_linkmode_maxio(struct phy_device *phydev)",
+          "{",
+          "        int physr_p_a43 = maxio_read_paged(phydev, 0xa43, MAXIO_PHYSR_P_A43);",
+          "",
+          "        if ((physr_p_a43 & MAXIO_PHY_SPEED) == MAXIO_PHY_1000M) {",
+          "                phydev->speed = SPEED_1000;",
+          "        } else if ((physr_p_a43 & MAXIO_PHY_SPEED) == MAXIO_PHY_100M) {",
+          "                phydev->speed = SPEED_100;",
+          "        } else if ((physr_p_a43 & MAXIO_PHY_SPEED) == MAXIO_PHY_10M) {",
+          "                phydev->speed = SPEED_10;",
+          "        }",
+          "",
+          "        if (physr_p_a43 & MAXIO_PHY_DUPLEX) {",
+          "                phydev->duplex = DUPLEX_FULL;",
+          "        } else {",
+          "                phydev->duplex = DUPLEX_HALF;",
+          "        }",
+          "}",
+          "",
+          "static void phy_resolve_link_compatibility_maxio(struct phy_device *phydev)",
+          "{",
+          "        int *paras = (int *)phydev->priv;",
+          "        int maxio_an_times = paras[0];",
+          "        int link_stable = paras[1];",
+          "        int iner, physr, insr;",
+          "        iner = maxio_read_paged(phydev, 0xa42, 0x12);",
+          "        if (iner & AUTONEG_COMPLETED_INT_EN) {",
+          "                physr = maxio_read_paged(phydev, 0xa43, 0x1a);",
+          "                if (physr & LINKOK) {",
+          "                        insr = maxio_read_paged(phydev, 0xa43, 0x1d);",
+          "                        if ((insr & AUTONEG_COMPLETED) == 0 && (link_stable == 0)) {",
+          "                                if (maxio_an_times < 4 ) {",
+          "                                        maxio_restart_aneg(phydev);",
+          "                                        phydev->link = 0;",
+          "                                        maxio_an_times++;",
+          "                                } else if (maxio_an_times == 4) {",
+          "                                        link_stable = 1;",
+          "                                }",
+          "                        } else if (insr & AUTONEG_COMPLETED) {",
+          "                                maxio_an_times = 0;",
+          "                                link_stable = 1;",
+          "                        }",
+          "",
+          "                        if (link_stable == 1)",
+          "                                maxio_an_times = 0;",
+          "                } else {",
+          "                        link_stable = 0;",
+          "                }",
+          "        }",
+          "",
+          "        paras[0] = maxio_an_times;",
+          "        paras[1] = link_stable;",
+          "}",
+          "",
+          "static int maxio_mae0621a_status(struct phy_device *phydev)",
+          "{",
+          "        int err, old_link = phydev->link;",
+          "",
+          "        err = genphy_update_link(phydev);",
+          "        if (err)",
+          "                return err;",
+          "",
+          "        if (phydev->autoneg == AUTONEG_ENABLE && old_link && phydev->link)",
+          "                return 0;",
+          "",
+          "        phydev->speed = SPEED_UNKNOWN;",
+          "        phydev->duplex = DUPLEX_UNKNOWN;",
+          "        phydev->pause = 0;",
+          "        phydev->asym_pause = 0;",
+          "",
+          "        phy_resolve_aneg_linkmode_maxio(phydev);",
+          "",
+          "        if (phydev->autoneg == AUTONEG_ENABLE)",
+          "                phy_resolve_link_compatibility_maxio(phydev);",
+          "",
+          "        return 0;",
+          "}",
+          "",
+          "static void maxio_mae0621a_remove(struct phy_device *phydev)",
+          "{",
+          "        printk(\"maxio driver remove\\r\\n\");",
+          "        if (phydev->priv != NULL) {",
+          "                kfree(phydev->priv);",
+          "        }",
+          "        phydev->priv = NULL;",
+          "}",
+          "",
+          "static int maxio_mae0621a_config_init(struct phy_device *phydev)",
+          "{",
+          "        int ret = 0;",
+          "",
+          "        printk(\"MAXIO_PHY_VER: %s \\n\", MAXIO_PHY_VER);",
+          "",
+          "        /* Vendor init sequence (from KickPi SDK driver via Armbian PR #10894) */",
+          "        ret |= maxio_write_paged(phydev, 0xd92, 0x2, 0x200a);",
+          "        ret |= maxio_write_paged(phydev, 0xda0, 0x10, 0xc13);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0xd, 0x7);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0xe, 0x3c);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0xd, 0x4007);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0xe, 0x0);",
+          "        ret |= maxio_write_paged(phydev, 0xd96, 0x13, 0x7bc);",
+          "        ret |= maxio_write_paged(phydev, 0xd8f, 0x8, 0x2500);",
+          "        ret |= maxio_write_paged(phydev, 0xd90, 0x2, 0x1555);",
+          "        ret |= maxio_write_paged(phydev, 0xd90, 0x5, 0x2b15);",
+          "        ret |= maxio_write_paged(phydev, 0xd92, 0x14, 0xa);",
+          "        ret |= maxio_write_paged(phydev, 0xd91, 0x7, 0x5b00);",
+          "        ret |= maxio_write_paged(phydev, 0xd8f, 0x0, 0x300);",
+          "        ret |= maxio_write_paged(phydev, 0xd92, 0xa, 0x8506);",
+          "        ret |= maxio_write_paged(phydev, 0xd91, 0x6, 0x6870);",
+          "        ret |= maxio_write_paged(phydev, 0xd91, 0x1, 0x940);",
+          "        ret |= maxio_write_paged(phydev, 0xda0, 0x13, 0x1303);",
+          "        ret |= maxio_write_paged(phydev, 0xd97, 0xc, 0x177);",
+          "        ret |= maxio_write_paged(phydev, 0xd97, 0xb, 0x9a9);",
+          "        ret |= maxio_write_paged(phydev, 0xa42, 0x12, 0x28);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0x4, 0xde1);",
+          "        ret |= maxio_write_paged(phydev, 0x0, 0x0, 0x9140);",
+          "",
+          "        PHY_WRITE(phydev, MAXIO_PAGE_SELECT, 0x0);",
+          "",
+          "        /*",
+          "         * MAE0621A is RTL8211F-compatible. phy-mode = \"rgmii\" means all",
+          "         * RGMII delay belongs to the MAC (allwinner,tx/rx-delay-ps).",
+          "         * Clear PHY-side 2ns TX/RX delays if enabled by strapping, else",
+          "         * double delay corrupts large frames at 1G.",
+          "         * Same layout as RTL8211F: page 0xd08, TXCR 0x11 bit8, RXCR 0x15 bit3.",
+          "         */",
+          "        {",
+          "                int v, w;",
+          "",
+          "                v = maxio_read_paged(phydev, 0xd08, 0x11);",
+          "                if (v < 0)",
+          "                        ret |= v;",
+          "                else if (v & BIT(8)) {",
+          "                        w = maxio_write_paged(phydev, 0xd08, 0x11, v & ~BIT(8));",
+          "                        if (w < 0)",
+          "                                ret |= w;",
+          "                }",
+          "",
+          "                v = maxio_read_paged(phydev, 0xd08, 0x15);",
+          "                if (v < 0)",
+          "                        ret |= v;",
+          "                else if (v & BIT(3)) {",
+          "                        w = maxio_write_paged(phydev, 0xd08, 0x15, v & ~BIT(3));",
+          "                        if (w < 0)",
+          "                                ret |= w;",
+          "                }",
+          "        }",
+          "",
+          "        ret |= maxio_self_check(phydev, 50);",
+          "        msleep(100);",
+          "",
+          "        if (ret) {",
+          "                pr_err(\"maxio: MAE0621A config_init failed (%d)\\n\", ret);",
+          "                return -EIO;",
+          "        }",
+          "",
+          "        return 0;",
+          "}",
+          "",
+          "static int maxio_mae0621a_probe(struct phy_device *phydev)",
+          "{",
+          "        int *paras;",
+          "        paras = kzalloc(2 * sizeof(int), GFP_KERNEL);",
+          "        if (!paras)",
+          "                return -ENOMEM;",
+          "",
+          "        phydev->priv = paras;",
+          "",
+          "        /* Provide RX CLK for the DWMAC: clkmode (oscillator) magic from the",
+          "         * KickPi SDK driver, required before the first DMA reset. */",
+          "        maxio_write_paged(phydev, 0xd92, 0x2, 0x200a);",
+          "",
+          "        printk(\"maxio_mae0621a_probe clkmode(oscillator) PHY_ID: 0x%x\\n\", phydev->phy_id);",
+          "",
+          "        PHY_WRITE(phydev, MAXIO_PAGE_SELECT, 0x0);",
+          "        msleep(100);",
+          "",
+          "        return 0;",
+          "}",
+          "",
+          "static struct phy_driver maxio_nc_drvs[] = {",
+          "        {",
+          "                .phy_id         = 0x7b744411,",
+          "                .phy_id_mask    = 0x7fffffff,",
+          "                .name           = \"MAE0621A-Q2C Gigabit Ethernet\",",
+          "                .features       = PHY_GBIT_FEATURES,",
+          "                .probe          = maxio_mae0621a_probe,",
+          "                .config_init    = maxio_mae0621a_config_init,",
+          "                .config_aneg    = &genphy_config_aneg,",
+          "                .read_status    = maxio_mae0621a_status,",
+          "                .suspend        = maxio_mae0621a_suspend,",
+          "                .resume         = maxio_mae0621a_resume,",
+          "                .remove         = maxio_mae0621a_remove,",
+          "        },",
+          "};",
+          "",
+          "module_phy_driver(maxio_nc_drvs);",
+          "",
+          "static struct mdio_device_id __maybe_unused maxio_nc_tbl[] = {",
+          "        { 0x7b744411, 0x7fffffff },",
+          "        { }",
+          "};",
+          "",
+          "MODULE_DEVICE_TABLE(mdio, maxio_nc_tbl);",
+          "",
+          "MODULE_DESCRIPTION(\"Maxio PHY driver\");",
+          "MODULE_AUTHOR(\"Zhao Yang\");",
+          "MODULE_LICENSE(\"GPL\");",
+          ])
+
+          def c_file(body):
+              return "\n".join("+" + l for l in body.splitlines())
+
+          # Kconfig/Makefile hunks (contexts byte-verified against linux v6.12)
+          p006 = "\n".join([
+          "diff --git a/drivers/net/phy/Kconfig b/drivers/net/phy/Kconfig",
+          "--- a/drivers/net/phy/Kconfig",
+          "+++ b/drivers/net/phy/Kconfig",
+          "@@ -257,6 +257,11 @@ config MARVELL_88X2222_PHY",
+          " \thelp",
+          " \t  Support for the Marvell 88X2222 Dual-port Multi-speed Ethernet",
+          " \t  Transceiver.",
+          " ",
+          "+config MAXIO_PHY",
+          "+\ttristate \"Maxio Ethernet PHYs\"",
+          "+\thelp",
+          "+\t  Support for the Maxio MAExxxx Ethernet PHYs",
+          "+",
+          " config MAXLINEAR_GPHY",
+          " \ttristate \"Maxlinear Ethernet PHYs\"",
+          "diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile",
+          "--- a/drivers/net/phy/Makefile",
+          "+++ b/drivers/net/phy/Makefile",
+          "@@ -74,5 +74,6 @@",
+          " obj-$(CONFIG_MARVELL_88Q2XXX_PHY)\t+= marvell-88q2xxx.o",
+          " obj-$(CONFIG_MARVELL_88X2222_PHY)\t+= marvell-88x2222.o",
+          " obj-$(CONFIG_MAXLINEAR_GPHY)\t+= mxl-gpy.o",
+          "+obj-$(CONFIG_MAXIO_PHY)\t+= maxio.o",
+          " obj-$(CONFIG_MEDIATEK_GE_PHY)\t+= mediatek-ge.o",
+          " obj-$(CONFIG_MEDIATEK_GE_SOC_PHY)\t+= mediatek-ge-soc.o",
+          "diff --git a/drivers/net/phy/maxio.c b/drivers/net/phy/maxio.c",
+          "new file mode 100644",
+          "--- /dev/null",
+          "+++ b/drivers/net/phy/maxio.c",
+          "@@ -0,0 +1," + str(len(maxio_c.splitlines())) + " @@",
+          ]) + "\n" + c_file(maxio_c) + "\n"
+          open(os.path.join(LP, '006-add-maxio-mae0621-phy-driver.patch'), 'w').write(p006)
+
+          # ---------- 4) kernel.config fragment += MAXIO_PHY ----------
+          with open(os.path.join(BOARD, 'kernel.config'), 'a') as f:
+              f.write("CONFIG_MAXIO_PHY=y\n")
+
+          print("== customize summary ==")
+          print("uboot.config:", len(uboot_cfg.splitlines()), "lines;",
+                "DDR3 ok:", "SUNXI_DRAM_H616_DDR3_1333" in uboot_cfg and "AXP_DCDC3_VOLT=1500" in uboot_cfg)
+          print("005 patch:", len(p005.splitlines()), "lines")
+          print("006 patch:", len(p006.splitlines()), "lines; maxio.c:", len(maxio_c.splitlines()), "lines")
+          PYEOF
+          # Pin assismgr to the exact version shipped in 16.3 (upstream fetches "latest" at build time)
+          sed -i 's|ASSISMGER_LATEST_VERSION=.*|ASSISMGER_LATEST_VERSION="v0.1.8"|' scripts/install_deb.sh
+          # Sanity checks - hard fail early with readable messages
+          grep -q 'SUNXI_DRAM_H616_DDR3_1333' haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b/uboot.config
+          grep -q 'AXP_DCDC3_VOLT=1500'         haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b/uboot.config
+          test -s haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b/patches/linux/005-k2b-v2-eth-dts.patch
+          test -s haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b/patches/linux/006-add-maxio-mae0621-phy-driver.patch
+          grep -q 'CONFIG_MAXIO_PHY=y'          haos-overlay/buildroot-external/board/hardkernel/kickpi-k2b/kernel.config
+          grep -q 'v0.1.8'                      scripts/install_deb.sh
+          echo "customize: all sanity checks passed"
+
+      - name: Build HAOS-ACE target k2b_h618 (upstream CI recipe, retry x2)
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          max_retries=2
+          count=0
+          until ./build.sh k2b_h618; do
+            count=$((count+1))
+            if [ $count -ge $max_retries ]; then exit 1; fi
+            df -h / || true
+            sleep 30
+          done
+
+      - name: Collect artifacts and checksums
+        run: |
+          ls -l output/images/
+          cd output/images
+          sha256sum haos* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload images
+        uses: actions/upload-artifact@v4
+        with:
+          name: haos-k2b-v2.2-ddr3-eth
+          path: |
+            output/images/haos*.img.xz
+            output/images/haos*.raucb
+            output/images/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
