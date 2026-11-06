@@ -596,6 +596,25 @@ jobs:
           grep -q 'v0.1.8'                      scripts/install_deb.sh
           echo "customize: all sanity checks passed"
 
+      - name: Use Debian archive for Bullseye security packages
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          dockerfile = Path("haos-overlay/Dockerfile")
+          source = dockerfile.read_text(encoding="utf-8")
+          marker = "# Docker\n"
+          if source.count(marker) != 1:
+              raise SystemExit("Expected one Docker installation section in haos-overlay/Dockerfile")
+
+          archive = (
+              "RUN grep -rlZ --include='*.list' --include='*.sources' "
+              "'://deb[.]debian[.]org/debian-security' /etc/apt "
+              "| xargs -0 -r sed -i 's|://deb[.]debian[.]org/debian-security|://archive.debian.org/debian-security|g'"
+          )
+          dockerfile.write_text(source.replace(marker, f"{archive}\n\n{marker}", 1), encoding="utf-8")
+          PY
+
       - name: Build HAOS-ACE target k2b_h618 (upstream CI recipe, retry x2)
         shell: 'script -q -e -c "bash {0}"'
         run: |
