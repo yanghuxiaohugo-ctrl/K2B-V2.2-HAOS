@@ -99,58 +99,54 @@ jobs:
           # ---------- 2) Kernel patch 005: V2.2 Ethernet DTS ----------
           # PHY addr 1->0, add PHY nRST on PI6, rx-delay 2300->2000ps, free PI6 from
           # the V1 USB-VBUS role, drop phy-supply. Matches the Armbian V2 DTS
-          # (PR #10894). Contexts byte-verified against the DTS state produced by
+          # (PR #10894). Generated from the DTS state produced by
           # haos-ace linux patches 002+003 (kernel 6.12.35 tree).
-          p005 = "\n".join([
-          "diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
-          "--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
-          "+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi",
-          "@@ -60,8 +60,8 @@",
-          " &emac0 {",
-          " \tpinctrl-names = \"default\";",
-          " \tpinctrl-0 = <&ext_rgmii_pins>;",
-          " \tphy-handle = <&ext_rgmii_phy>;",
-          "-\tallwinner,rx-delay-ps = <2300>;",
-          "+\tallwinner,rx-delay-ps = <2000>;",
-          " \tallwinner,tx-delay-ps = <700>;",
-          " \tphy-mode = \"rgmii\";",
-          " \tstatus = \"okay\";",
-          "@@ -64,6 +64,9 @@",
-          " &mdio0 {",
-          "-\text_rgmii_phy: ethernet-phy@1 {",
-          "+\text_rgmii_phy: ethernet-phy@0 {",
-          " \t\tcompatible = \"ethernet-phy-ieee802.3-c22\";",
-          "-\t\treg = <1>;",
-          "+\t\treg = <0>;",
-          "+\t\treset-assert-us = <20000>;",
-          "+\t\treset-deassert-us = <100000>;",
-          "+\t\treset-gpios = <&pio 8 6 GPIO_ACTIVE_LOW>; /* PI6, PHY nRST on K2B V2.2 */",
-          " \t};",
-          " };",
-          "@@ -40,10 +40,8 @@",
-          " \treg_usb1_vbus: regulator-usb1-vbus {",
-          " \t\tcompatible = \"regulator-fixed\";",
-          " \t\tregulator-name = \"usb1-vbus\";",
-          " \t\tregulator-min-microvolt = <5000000>;",
-          " \t\tregulator-max-microvolt = <5000000>;",
-          " \t\tvin-supply = <&reg_vcc5v>;",
-          "-\t\tenable-active-high;",
-          "-\t\tgpio = <&pio 8 6 GPIO_ACTIVE_HIGH>; /* PI6 */",
-          " \t};",
-          " };",
-          "diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
-          "--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
-          "+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts",
-          "@@ -70,8 +70,7 @@",
-          " &emac0 {",
-          " \tpinctrl-names = \"default\";",
-          " \tphy-mode = \"rgmii\";",
-          " \tpinctrl-0 = <&ext_rgmii_pins>;",
-          " \tphy-handle = <&ext_rgmii_phy>;",
-          "-\tphy-supply = <&reg_vcc3v3>;",
-          " \tstatus = \"okay\";",
-          " };",
-          ]) + "\n"
+          p005 = (
+              '--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi\n'
+              '+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtsi\n'
+              '@@ -47,8 +47,6 @@\n'
+              ' \t\tregulator-min-microvolt = <5000000>;\n'
+              ' \t\tregulator-max-microvolt = <5000000>;\n'
+              ' \t\tvin-supply = <&reg_vcc5v>;\n'
+              '-\t\tenable-active-high;\n'
+              '-\t\tgpio = <&pio 8 6 GPIO_ACTIVE_HIGH>; /* PI6 */\n'
+              ' \t};\n'
+              ' };\n'
+              ' \n'
+              '@@ -62,16 +60,19 @@\n'
+              ' \tpinctrl-names = "default";\n'
+              ' \tpinctrl-0 = <&ext_rgmii_pins>;\n'
+              ' \tphy-handle = <&ext_rgmii_phy>;\n'
+              '-\tallwinner,rx-delay-ps = <2300>;\n'
+              '+\tallwinner,rx-delay-ps = <2000>;\n'
+              ' \tallwinner,tx-delay-ps = <700>;\n'
+              ' \tphy-mode = "rgmii";\n'
+              ' \tstatus = "okay";\n'
+              ' };\n'
+              ' \n'
+              ' &mdio0 {\n'
+              '-\text_rgmii_phy: ethernet-phy@1 {\n'
+              '+\text_rgmii_phy: ethernet-phy@0 {\n'
+              ' \t\tcompatible = "ethernet-phy-ieee802.3-c22";\n'
+              '-\t\treg = <1>;\n'
+              '+\t\treg = <0>;\n'
+              '+\t\treset-assert-us = <20000>;\n'
+              '+\t\treset-deassert-us = <100000>;\n'
+              '+\t\treset-gpios = <&pio 8 6 GPIO_ACTIVE_LOW>; /* PI6, PHY nRST on K2B V2.2 */\n'
+              ' \t};\n'
+              ' };\n'
+              ' \n'
+              '--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts\n'
+              '+++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts\n'
+              '@@ -72,7 +72,6 @@\n'
+              ' \tphy-mode = "rgmii";\n'
+              ' \tpinctrl-0 = <&ext_rgmii_pins>;\n'
+              ' \tphy-handle = <&ext_rgmii_phy>;\n'
+              '-\tphy-supply = <&reg_vcc3v3>;\n'
+              ' \tstatus = "okay";\n'
+              ' };\n'
+              ' \n'
+          )
           open(os.path.join(LP, '005-k2b-v2-eth-dts.patch'), 'w').write(p005)
 
           # ---------- 3) Kernel patch 006: Maxio MAE0621A-Q2C PHY driver ----------
@@ -540,39 +536,38 @@ jobs:
           def c_file(body):
               return "\n".join("+" + l for l in body.splitlines())
 
-          # Kconfig/Makefile hunks (contexts byte-verified against linux v6.12)
-          p006 = "\n".join([
-          "diff --git a/drivers/net/phy/Kconfig b/drivers/net/phy/Kconfig",
-          "--- a/drivers/net/phy/Kconfig",
-          "+++ b/drivers/net/phy/Kconfig",
-          "@@ -257,6 +257,11 @@ config MARVELL_88X2222_PHY",
-          " \thelp",
-          " \t  Support for the Marvell 88X2222 Dual-port Multi-speed Ethernet",
-          " \t  Transceiver.",
-          " ",
-          "+config MAXIO_PHY",
-          "+\ttristate \"Maxio Ethernet PHYs\"",
-          "+\thelp",
-          "+\t  Support for the Maxio MAExxxx Ethernet PHYs",
-          "+",
-          " config MAXLINEAR_GPHY",
-          " \ttristate \"Maxlinear Ethernet PHYs\"",
-          "diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile",
-          "--- a/drivers/net/phy/Makefile",
-          "+++ b/drivers/net/phy/Makefile",
-          "@@ -74,5 +74,6 @@",
-          " obj-$(CONFIG_MARVELL_88Q2XXX_PHY)\t+= marvell-88q2xxx.o",
-          " obj-$(CONFIG_MARVELL_88X2222_PHY)\t+= marvell-88x2222.o",
-          " obj-$(CONFIG_MAXLINEAR_GPHY)\t+= mxl-gpy.o",
-          "+obj-$(CONFIG_MAXIO_PHY)\t+= maxio.o",
-          " obj-$(CONFIG_MEDIATEK_GE_PHY)\t+= mediatek-ge.o",
-          " obj-$(CONFIG_MEDIATEK_GE_SOC_PHY)\t+= mediatek-ge-soc.o",
-          "diff --git a/drivers/net/phy/maxio.c b/drivers/net/phy/maxio.c",
-          "new file mode 100644",
-          "--- /dev/null",
-          "+++ b/drivers/net/phy/maxio.c",
-          "@@ -0,0 +1," + str(len(maxio_c.splitlines())) + " @@",
-          ]) + "\n" + c_file(maxio_c) + "\n"
+          # Kconfig/Makefile hunks generated from Linux v6.12.35 source
+          p006 = (
+              '--- a/drivers/net/phy/Kconfig\n'
+              '+++ b/drivers/net/phy/Kconfig\n'
+              '@@ -257,6 +257,11 @@\n'
+              ' \thelp\n'
+              ' \t  Support for the Marvell 88X2222 Dual-port Multi-speed Ethernet\n'
+              ' \t  Transceiver.\n'
+              '+\n'
+              '+config MAXIO_PHY\n'
+              '+\ttristate "Maxio Ethernet PHYs"\n'
+              '+\thelp\n'
+              '+\t  Support for the Maxio MAExxxx Ethernet PHYs\n'
+              ' \n'
+              ' config MAXLINEAR_GPHY\n'
+              ' \ttristate "Maxlinear Ethernet PHYs"\n'
+              '--- a/drivers/net/phy/Makefile\n'
+              '+++ b/drivers/net/phy/Makefile\n'
+              '@@ -74,6 +74,7 @@\n'
+              ' obj-$(CONFIG_MARVELL_88Q2XXX_PHY)\t+= marvell-88q2xxx.o\n'
+              ' obj-$(CONFIG_MARVELL_88X2222_PHY)\t+= marvell-88x2222.o\n'
+              ' obj-$(CONFIG_MAXLINEAR_GPHY)\t+= mxl-gpy.o\n'
+              '+obj-$(CONFIG_MAXIO_PHY)\t+= maxio.o\n'
+              ' obj-$(CONFIG_MEDIATEK_GE_PHY)\t+= mediatek-ge.o\n'
+              ' obj-$(CONFIG_MEDIATEK_GE_SOC_PHY)\t+= mediatek-ge-soc.o\n'
+              ' obj-$(CONFIG_MESON_GXL_PHY)\t+= meson-gxl.o\n'
+              'diff --git a/drivers/net/phy/maxio.c b/drivers/net/phy/maxio.c\n'
+              'new file mode 100644\n'
+              '--- /dev/null\n'
+              '+++ b/drivers/net/phy/maxio.c\n'
+              '@@ -0,0 +1,'
+          ) + str(len(maxio_c.splitlines())) + " @@\n" + c_file(maxio_c) + "\n"
           open(os.path.join(LP, '006-add-maxio-mae0621-phy-driver.patch'), 'w').write(p006)
 
           # ---------- 4) kernel.config fragment += MAXIO_PHY ----------
@@ -615,17 +610,10 @@ jobs:
           dockerfile.write_text(source.replace(marker, f"{archive}\n\n{marker}", 1), encoding="utf-8")
           PY
 
-      - name: Build HAOS-ACE target k2b_h618 (upstream CI recipe, retry x2)
+      - name: Build HAOS-ACE target k2b_h618 (single attempt)
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          max_retries=2
-          count=0
-          until ./build.sh k2b_h618; do
-            count=$((count+1))
-            if [ $count -ge $max_retries ]; then exit 1; fi
-            df -h / || true
-            sleep 30
-          done
+          ./build.sh k2b_h618
 
       - name: Collect artifacts and checksums
         run: |
