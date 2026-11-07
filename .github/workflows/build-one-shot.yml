@@ -617,6 +617,112 @@ jobs:
           dockerfile.write_text(source.replace(marker, f"{archive}\n\n{marker}", 1), encoding="utf-8")
           PY
 
+      - name: Prepare Home Assistant image versions
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          # Snapshot from the haos-ace stable manifest, fetched and checked on 2026-11-07.
+          versions = json.loads(r'''
+          {
+            "channel": "stable",
+            "supervisor": "2026.07.5",
+            "homeassistant": {
+              "default": "2026.8.1",
+              "qemux86": "2025.11.3",
+              "qemux86-64": "2026.8.1",
+              "qemuarm": "2025.11.3",
+              "qemuarm-64": "2026.8.1",
+              "generic-x86-64": "2026.8.1",
+              "intel-nuc": "2026.8.1",
+              "khadas-vim3": "2026.8.1",
+              "raspberrypi": "2025.11.3",
+              "raspberrypi2": "2025.11.3",
+              "raspberrypi3": "2025.11.3",
+              "raspberrypi3-64": "2026.8.1",
+              "raspberrypi4": "2025.11.3",
+              "raspberrypi4-64": "2026.8.1",
+              "raspberrypi5-64": "2026.8.1",
+              "yellow": "2026.8.1",
+              "green": "2026.8.1",
+              "tinker": "2025.11.3",
+              "odroid-c2": "2026.8.1",
+              "odroid-c4": "2026.8.1",
+              "odroid-m1": "2026.8.1",
+              "odroid-n2": "2026.8.1",
+              "odroid-xu": "2025.11.3"
+            },
+            "hassos": {
+              "ova": "18.2",
+              "rpi3-64": "18.2",
+              "rpi4-64": "18.2",
+              "rpi5-64": "18.2",
+              "yellow": "18.2",
+              "green": "18.2",
+              "odroid-c2": "18.2",
+              "odroid-c4": "18.2",
+              "odroid-m1": "18.2",
+              "odroid-m1s": "18.2",
+              "odroid-n2": "18.2",
+              "generic-x86-64": "18.2",
+              "generic-aarch64": "18.2",
+              "khadas-vim3": "18.2"
+            },
+            "hassos-upgrade": {
+              "3": "3.13",
+              "4": "4.20",
+              "5": "5.13",
+              "6": "6.6",
+              "7": "7.6",
+              "8": "8.5",
+              "9": "9.5",
+              "10": "10.5",
+              "11": "11.5",
+              "12": "15.2",
+              "13": "15.2",
+              "14": "15.2",
+              "15": "15.2"
+            },
+            "ota": "https://os-artifacts.home-assistant.io/{version}/{os_name}_{board}-{version}.raucb",
+            "cli": "2026.06.0",
+            "dns": "2026.02.0",
+            "audio": "2026.02.0",
+            "multicast": "2026.02.0",
+            "observer": "2026.02.0",
+            "images": {
+              "core": "ghcr.io/home-assistant/{machine}-homeassistant",
+              "supervisor": "ghcr.io/home-assistant/{arch}-hassio-supervisor",
+              "cli": "ghcr.io/home-assistant/{arch}-hassio-cli",
+              "audio": "ghcr.io/home-assistant/{arch}-hassio-audio",
+              "dns": "ghcr.io/home-assistant/{arch}-hassio-dns",
+              "observer": "ghcr.io/home-assistant/{arch}-hassio-observer",
+              "multicast": "ghcr.io/home-assistant/{arch}-hassio-multicast"
+            }
+          }
+          ''')
+          versions["core"] = "landingpage"
+          images = ("supervisor", "dns", "audio", "cli", "multicast", "observer", "core")
+          if versions.get("channel") != "stable" or any(
+              not versions.get(image) or not versions.get("images", {}).get(image)
+              for image in images
+          ):
+              raise SystemExit("Incomplete stable Home Assistant image manifest")
+
+          package = Path("haos-overlay/buildroot-external/package/hassio")
+          recipe = package / "hassio.mk"
+          source = recipe.read_text(encoding="utf-8")
+          url = 'HASSIO_VERSION_URL = "https://gitee.com/LanSilence/ha-version/raw/master/"\n'
+          download = "\tcurl -s $(HASSIO_VERSION_URL)$(HASSIO_VERSION_CHANNEL)\".json\" | jq '.core = \"landingpage\"' > $(@D)/version.json\n"
+          if source.count(url) != 1 or source.count(download) != 1:
+              raise SystemExit("Expected the pinned haos-ace version manifest recipe")
+
+          (package / "stable-version.json").write_text(json.dumps(versions, indent=2) + "\n", encoding="utf-8")
+          copy = '\tcp "$(@D)/stable-version.json" "$(@D)/version.json"\n'
+          recipe.write_text(source.replace(url, "", 1).replace(download, copy, 1), encoding="utf-8")
+          print("Prepared verified stable Home Assistant image manifest")
+          PY
+
       - name: Build HAOS-ACE target k2b_h618 (single attempt)
         shell: 'script -q -e -c "bash {0}"'
         run: |
