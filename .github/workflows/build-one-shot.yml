@@ -733,10 +733,49 @@ jobs:
           if source.count("skopeo inspect ") != 1 or source.count("skopeo copy ") != 1:
               raise SystemExit("Expected the pinned Home Assistant container fetch script")
           source = source.replace("skopeo inspect ", "skopeo --override-os linux --override-arch arm64 inspect ", 1)
-          source = source.replace("skopeo copy ", "skopeo --override-os linux --override-arch arm64 copy ", 1)
+          old_copy = '\t\tretry 3 "skopeo copy \'docker://${image_name}@${image_digest}\' \'docker-archive:${image_file_path}:${full_image_name}\'"\n'
+          new_copy = '\n'.join([
+              '\t\timage_work_dir=$(mktemp -d "${dl_dir}/convert.XXXXXX")',
+              '\t\ttrap \'rm -rf -- "${image_work_dir}"\' EXIT',
+              '\t\tretry 3 "skopeo --override-os linux --override-arch arm64 copy --dest-compress-format gzip \'docker://${image_name}@${image_digest}\' \'oci:${image_work_dir}/oci:normalized\'"',
+              '\t\tretry 3 "skopeo --override-os linux --override-arch arm64 copy \'oci:${image_work_dir}/oci:normalized\' \'docker-archive:${image_work_dir}/image.tar:${full_image_name}\'"',
+              '\t\tmv -- "${image_work_dir}/image.tar" "${image_file_path}"',
+              '',
+          ])
+          if source.count(old_copy) != 1:
+              raise SystemExit("Expected the pinned Docker archive copy command")
+          source = source.replace(old_copy, new_copy, 1)
           script.write_text(source, encoding="utf-8")
-          print("Home Assistant container downloads will select linux/arm64")
+          print("Home Assistant container downloads will select linux/arm64 and normalize layers through gzip OCI")
           PY
+
+      - name: Verify all ARM64 container archives before compiling
+        timeout-minutes: 30
+        run: |
+          cp -a haos-overlay/. operating-system/
+          docker build -t hassos:local operating-system
+          mkdir -p "$HOME/hassos-cache/dl/hassio"
+          image_check=$(mktemp -d "$RUNNER_TEMP/hassio-archive-check.XXXXXX")
+          trap 'rm -rf -- "$image_check"' EXIT
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint /bin/bash \
+            -v "$PWD/operating-system:/build:ro" \
+            -v "$HOME/hassos-cache:/cache" \
+            -v "$image_check:/image-check" \
+            hassos:local -euo pipefail -c '
+              skopeo --version
+              for image in supervisor dns audio cli multicast observer core; do
+                /build/buildroot-external/package/hassio/fetch-container-image.sh \
+                  aarch64 green /build/buildroot-external/package/hassio/stable-version.json \
+                  "$image" /cache/dl/hassio /image-check
+                for archive in /image-check/*.tar; do
+                  skopeo inspect "docker-archive:${archive}" | \
+                    jq -e ".Architecture == \"arm64\" and .Os == \"linux\""
+                  rm -- "$archive"
+                done
+                echo "Container archive verified: $image linux/arm64"
+              done
+              echo "container preflight: all 7 archives passed"
+            '
 
       - name: Build HAOS-ACE target k2b_h618 (single attempt)
         shell: 'script -q -e -c "bash {0}"'
