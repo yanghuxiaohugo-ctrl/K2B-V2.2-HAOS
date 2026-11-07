@@ -723,6 +723,21 @@ jobs:
           print("Prepared verified stable Home Assistant image manifest")
           PY
 
+      - name: Select ARM64 Home Assistant container images
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          script = Path("operating-system/buildroot-external/package/hassio/fetch-container-image.sh")
+          source = script.read_text(encoding="utf-8")
+          if source.count("skopeo inspect ") != 1 or source.count("skopeo copy ") != 1:
+              raise SystemExit("Expected the pinned Home Assistant container fetch script")
+          source = source.replace("skopeo inspect ", "skopeo --override-os linux --override-arch arm64 inspect ", 1)
+          source = source.replace("skopeo copy ", "skopeo --override-os linux --override-arch arm64 copy ", 1)
+          script.write_text(source, encoding="utf-8")
+          print("Home Assistant container downloads will select linux/arm64")
+          PY
+
       - name: Build HAOS-ACE target k2b_h618 (single attempt)
         shell: 'script -q -e -c "bash {0}"'
         run: |
