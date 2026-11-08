@@ -41,6 +41,25 @@ required=['MAXIO_PHY','DWMAC_SUN8I','PHY_SUN4I_USB','USB_EHCI_HCD_PLATFORM','USB
 for option in required:assert f'CONFIG_{option}=y\n' in actual_config,option
 assert 'CONFIG_AIC8800_WLAN_SUPPORT=' not in actual_config
 run(make+['prepare','scripts','allwinner/sun50i-h618-k2b.dtb','drivers/net/phy/maxio.o','drivers/net/ethernet/stmicro/stmmac/stmmac_main.o','drivers/net/ethernet/stmicro/stmmac/dwmac-sun8i.o','drivers/phy/allwinner/phy-sun4i-usb.o','drivers/usb/host/ohci-platform.o','drivers/usb/host/ehci-platform.o'],cwd=KERNEL,env=env)
+# Also compile the pinned external modules, catching API changes before a full build.
+external=[
+    ('v4l2loopback','https://codeload.github.com/umlaeute/v4l2loopback/tar.gz/v0.13.2','1e57e1e382d7451aa2a88d63cc9f146eab1f425b90e76104d4c3d73127e34771','',['v4l2loopback.o']),
+    ('generic_raw_uart','https://codeload.github.com/alexreinert/piVCCU/tar.gz/b80aacfb75e9689d14d4e2c94380728816c6313e','1a99e87c48e95c173ce6f43b8783ac359022886265bb2ed86f67c6d05cf12658','kernel',['generic_raw_uart.o','rpi_rf_mod_led.o','dummy_rx8130.o','hb_rf_usb.o','hb_rf_usb_2.o','hb_rf_eth.o']),
+]
+for name,url,expected,subdir,objects in external:
+    target=CHECK/name;target.mkdir(exist_ok=True)
+    packed=CHECK/(name+'.tar.gz')
+    with urlopen(url,timeout=90) as remote,packed.open('wb') as f:shutil.copyfileobj(remote,f)
+    with packed.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==expected,name
+    with tarfile.open(packed) as tar:tar.extractall(target,filter='data')
+    unpacked=next(p for p in target.iterdir() if p.is_dir())
+    patchdirs=[EXTERNAL/'patches'/name]
+    if name=='generic_raw_uart':patchdirs.insert(0,EXTERNAL/'package/generic_raw_uart')
+    for directory in patchdirs:
+        for patch in sorted(directory.glob('*.patch')):
+            run(['patch','-F0','-g0','-p1','--no-backup-if-mismatch','-t','-N','-i',str(patch)],cwd=unpacked)
+    module=unpacked/subdir
+    run(make+[f'M={module}',*objects],cwd=KERNEL,env=env)
 dtb=KERNEL/'arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dtb'
 def getprop(node,prop):
     return subprocess.check_output(['fdtget','-t','u',str(dtb),node,prop],text=True).strip()
@@ -49,7 +68,7 @@ assert getprop(node,'regulator-min-microvolt')=='1500000'
 assert getprop(node,'regulator-max-microvolt')=='1500000'
 assert getprop('/soc/ethernet@5020000','allwinner,rx-delay-ps')=='2000'
 assert getprop('/soc/ethernet@5020000','allwinner,tx-delay-ps')=='700'
-report={'kernel':version,'source_sha256':actual,'dtb_sha256':hashlib.sha256(dtb.read_bytes()).hexdigest(),'ddr3_linux_microvolts':1500000,'checks':'exact patches, effective config, DTB and changed driver objects passed','hardware_boot_verified':False}
+report={'kernel':version,'source_sha256':actual,'dtb_sha256':hashlib.sha256(dtb.read_bytes()).hexdigest(),'ddr3_linux_microvolts':1500000,'checks':'exact patches, effective config, DTB, changed driver objects and pinned external modules passed','hardware_boot_verified':False}
 result=SOURCE/'validation-results';result.mkdir(exist_ok=True)
 shutil.copyfile(KERNEL/'.config',result/'kernel.config')
 shutil.copyfile(dtb,result/dtb.name)

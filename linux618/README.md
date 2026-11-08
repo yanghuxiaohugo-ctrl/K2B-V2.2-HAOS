@@ -27,6 +27,8 @@ The old board's 001-004 files combined V1-only wireless drivers and board descri
 
 The HAOS global IPv6 reachability patch is also regenerated for 6.18.62. All seven final patches were locally applied with GNU patch `-F0` and no offsets or fuzz. The pinned Buildroot's header selector says `6.12.x or later`; its existing loose header-version check supports 6.18 without changing Buildroot or inventing a new Kconfig option.
 
+The pinned v4l2loopback 0.13.2 uses the removed `from_timer` and `del_timer_sync` names. A small Linux-6.18-only compatibility patch maps them to the new helpers; its version and source hash remain unchanged. Validation also compiles v4l2loopback and all six generic_raw_uart objects selected on this architecture, to expose external-module API failures before a full Buildroot run.
+
 ## Workflow modes
 
 Run `.github/workflows/build-linux-6.18.yml` with:

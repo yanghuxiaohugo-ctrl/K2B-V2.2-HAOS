@@ -25,7 +25,10 @@ for entry in MANIFEST['patches']:shutil.copyfile(ASSETS/'patches'/entry['patch']
 
 # Retain the HAOS IPv6 reachability behavior, rebased with exact 6.18 context.
 globaldir=OVERLAY/'patches/linux';globaldir.mkdir(parents=True,exist_ok=True)
-for p in (ASSETS/'global-patches/linux').glob('*.patch'):shutil.copyfile(p,globaldir/p.name)
+for p in (ASSETS/'global-patches').rglob('*.patch'):
+    target=OVERLAY/'patches'/p.relative_to(ASSETS/'global-patches')
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copyfile(p,target)
 
 defconfig=OVERLAY/'configs/k2b_h618_defconfig'
 source=defconfig.read_text()
