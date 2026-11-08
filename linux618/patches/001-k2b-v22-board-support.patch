@@ -1,0 +1,209 @@
+diff --git a/arch/arm64/boot/dts/allwinner/Makefile b/arch/arm64/boot/dts/allwinner/Makefile
+--- a/arch/arm64/boot/dts/allwinner/Makefile
++++ b/arch/arm64/boot/dts/allwinner/Makefile
+@@ -59,3 +59,5 @@
+ dtb-$(CONFIG_ARCH_SUNXI) += sun55i-h728-x96qpro+.dtb
+ dtb-$(CONFIG_ARCH_SUNXI) += sun55i-t527-avaota-a1.dtb
+ dtb-$(CONFIG_ARCH_SUNXI) += sun55i-t527-orangepi-4a.dtb
++
++dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h618-k2b.dtb
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts
+@@ -0,0 +1,195 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++/*
++ * Copyright (C) 2023 Arm Ltd.
++ */
++
++/dts-v1/;
++
++#include "sun50i-h616.dtsi"
++#include "sun50i-h616-cpu-opp.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++#include <dt-bindings/leds/common.h>
++
++/ {
++	model = "KICKPI K2B V2.2 HAOS";
++	compatible = "kickpi,kickpi-k2b-v2", "allwinner,sun50i-h618";
++	
++	aliases {
++		serial0 = &uart0;
++		mmc0 = &mmc0;
++		mmc1 = &mmc1;
++		mmc2 = &mmc2;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		led-0 {
++			label="sys_led";
++			function = LED_FUNCTION_STATUS;
++			color = <LED_COLOR_ID_BLUE>;
++			gpios = <&pio 8 16 GPIO_ACTIVE_HIGH>; /* PI16 */
++			linux,default-trigger = "heartbeat";
++		};
++	};
++
++	reg_vcc5v: vcc5v {
++		/* board wide 5V supply directly from the USB-C socket */
++		compatible = "regulator-fixed";
++		regulator-name = "vcc-5v";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		regulator-always-on;
++		regulator-boot-on;
++	};
++
++
++	wifi_pwrseq: pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		pinctrl-names = "default";
++		reset-gpios = <&pio 6 18 GPIO_ACTIVE_LOW>; /* PG18 */
++	};
++};
++
++&emac0 {
++	status = "disabled";
++};
++
++&cpu0 {
++	cpu-supply = <&reg_dcdc2>;
++};
++
++&ehci1 {
++	status = "okay";
++};
++
++/* USB 2 & 3 are on the FPC connector (or the exansion board) */
++
++&mmc0 {
++	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;	/* PF6 */
++	bus-width = <4>;
++	vmmc-supply = <&reg_dldo1>;
++	status = "okay";
++};
++&mmc1 {
++	vmmc-supply = <&reg_dldo1>;
++	vqmmc-supply = <&reg_aldo1>;
++	mmc-pwrseq = <&wifi_pwrseq>;
++	bus-width = <4>;
++	non-removable;
++	status = "disabled";
++
++	sdio_wifi: wifi@1 {
++		reg = <1>;
++	};
++};
++
++&mmc2 {
++	vmmc-supply = <&reg_dldo1>;
++	vqmmc-supply = <&reg_aldo1>;
++	bus-width = <8>;
++	non-removable;
++	cap-mmc-hw-reset;
++	mmc-ddr-1_8v;
++	mmc-hs200-1_8v;
++	status = "disabled";
++};
++&ohci1 {
++	status = "okay";
++};
++
++&pio {
++	vcc-pc-supply = <&reg_dldo1>;
++	vcc-pf-supply = <&reg_dldo1>;	/* internally via VCC-IO */
++	vcc-pg-supply = <&reg_aldo1>;
++	vcc-ph-supply = <&reg_dldo1>;	/* internally via VCC-IO */
++	vcc-pi-supply = <&reg_dldo1>;
++};
++
++
++&r_i2c {
++	status = "okay";
++
++	axp313: pmic@36 {
++		compatible = "x-powers,axp313a";
++		reg = <0x36>;
++		#interrupt-cells = <1>;
++		interrupt-controller;
++		interrupt-parent = <&pio>;
++		interrupts = <2 9 IRQ_TYPE_LEVEL_LOW>;	/* PC9 */
++
++		vin1-supply = <&reg_vcc5v>;
++		vin2-supply = <&reg_vcc5v>;
++		vin3-supply = <&reg_vcc5v>;
++
++		regulators {
++			/* Supplies VCC-PLL, so needs to be always on. */
++			reg_aldo1: aldo1 {
++				regulator-always-on;
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++				regulator-name = "vcc1v8";
++			};
++
++			/* Supplies VCC-IO, so needs to be always on. */
++			reg_dldo1: dldo1 {
++				regulator-always-on;
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-name = "vcc3v3";
++			};
++
++			reg_dcdc1: dcdc1 {
++				regulator-always-on;
++				regulator-min-microvolt = <810000>;
++				regulator-max-microvolt = <990000>;
++				regulator-name = "vdd-gpu-sys";
++			};
++
++			reg_dcdc2: dcdc2 {
++				regulator-always-on;
++				regulator-min-microvolt = <810000>;
++				regulator-max-microvolt = <1100000>;
++				regulator-name = "vdd-cpu";
++			};
++
++			reg_dcdc3: dcdc3 {
++				regulator-always-on;
++				regulator-min-microvolt = <1500000>;
++				regulator-max-microvolt = <1500000>;
++				regulator-name = "vdd-dram";
++			};
++		};
++	};
++};
++
++&spi0  {
++	status = "disabled";
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_ph_pins>;
++	status = "okay";
++};
++
++&uart1 {
++	status = "disabled";
++};
++
++&usbotg {
++
++	dr_mode = "peripheral";
++	status = "okay";
++};
++
++&usbphy {
++	usb1_vbus-supply = <&reg_vcc5v>;
++	status = "okay";
++};

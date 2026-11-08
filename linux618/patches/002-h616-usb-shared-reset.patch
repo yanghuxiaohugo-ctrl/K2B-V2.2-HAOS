@@ -1,0 +1,12 @@
+diff --git a/drivers/phy/allwinner/phy-sun4i-usb.c b/drivers/phy/allwinner/phy-sun4i-usb.c
+--- a/drivers/phy/allwinner/phy-sun4i-usb.c
++++ b/drivers/phy/allwinner/phy-sun4i-usb.c
+@@ -787,7 +787,7 @@
+ 			continue;
+ 
+ 		snprintf(name, sizeof(name), "usb%d_reset", i);
+-		phy->reset = devm_reset_control_get(dev, name);
++		phy->reset = devm_reset_control_get_shared(dev, name);
+ 		if (IS_ERR(phy->reset)) {
+ 			if (PTR_ERR(phy->reset) == -ENOENT)
+ 				break;

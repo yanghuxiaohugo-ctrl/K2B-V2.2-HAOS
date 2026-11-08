@@ -1,0 +1,65 @@
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -52,6 +52,9 @@
+ #include "dwmac1000.h"
+ #include "dwxgmac2.h"
+ #include "hwif.h"
++
++#define MAXIO_PHY_MAE0621A_Q2C_ID 0x7b744411
++#define MAXIO_PHY_MAE0621A_Q3C_ID 0x7b744412
+ 
+ /* As long as the interface is active, we keep the timestamping counter enabled
+  * with fine resolution and binary rollover. This avoid non-monotonic behavior
+@@ -3924,6 +3927,24 @@
+ 	 * hardware setup. Resume a suspended PHY here first.
+ 	 */
+ 	phylink_prepare_resume(priv->phylink);
++
++	/*
++	 * Provide RX CLK for the DWMAC otherwise the controller will
++	 * fail to initialize with "DMA engine initialization failed".
++	 * Maxio MAE0621 needs its vendor config_init to start the clock.
++	 */
++	if (dev->phydev) {
++		if (dev->phydev->phy_id == MAXIO_PHY_MAE0621A_Q2C_ID ||
++		    dev->phydev->phy_id == MAXIO_PHY_MAE0621A_Q3C_ID) {
++			ret = phy_init_hw(dev->phydev);
++			if (ret < 0) {
++				netdev_err(priv->dev,
++					   "PHY initialization failed: %d\n",
++					   ret);
++				goto init_error;
++			}
++		}
++	}
+ 
+ 	stmmac_reset_queues_param(priv);
+ 
+@@ -8014,6 +8035,26 @@
+ 	 */
+ 	phylink_prepare_resume(priv->phylink);
+ 
++	/*
++	 * The Maxio resume callbacks issue BMCR_RESET, which drops the
++	 * vendor clock configuration that provides the RX clock. Run
++	 * the vendor config_init again before the DMA reset below,
++	 * otherwise the controller can fail with "DMA engine
++	 * initialization failed" after resume. Same as in __stmmac_open().
++	 */
++	if (ndev->phydev) {
++		if (ndev->phydev->phy_id == MAXIO_PHY_MAE0621A_Q2C_ID ||
++		    ndev->phydev->phy_id == MAXIO_PHY_MAE0621A_Q3C_ID) {
++			ret = phy_init_hw(ndev->phydev);
++			if (ret < 0) {
++				netdev_err(ndev, "PHY initialization failed: %d\n",
++					   ret);
++				rtnl_unlock();
++				return ret;
++			}
++		}
++	}
++
+ 	mutex_lock(&priv->lock);
+ 
+ 	stmmac_reset_queues_param(priv);

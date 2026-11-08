@@ -1,0 +1,32 @@
+diff --git a/net/ipv6/Kconfig b/net/ipv6/Kconfig
+--- a/net/ipv6/Kconfig
++++ b/net/ipv6/Kconfig
+@@ -45,6 +45,15 @@
+ 	help
+ 	  Support for optimistic Duplicate Address Detection. It allows for
+ 	  autoconfigured addresses to be used more quickly.
++
++	  If unsure, say N.
++
++config IPV6_REACHABILITY_PROBE
++	bool "IPv6: Always use reachability probing (RFC 4191)"
++	help
++	  By default reachability probing is disabled on router devices (when
++	  IPv6 forwarding is enabled). This option explicitly enables
++	  reachability probing always.
+ 
+ 	  If unsure, say N.
+ 
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -2286,7 +2286,8 @@
+ 
+ 	strict |= flags & RT6_LOOKUP_F_IFACE;
+ 	strict |= flags & RT6_LOOKUP_F_IGNORE_LINKSTATE;
+-	if (READ_ONCE(net->ipv6.devconf_all->forwarding) == 0)
++	if (READ_ONCE(net->ipv6.devconf_all->forwarding) == 0 ||
++	    IS_ENABLED(CONFIG_IPV6_REACHABILITY_PROBE))
+ 		strict |= RT6_LOOKUP_F_REACHABLE;
+ 
+ 	rcu_read_lock();
