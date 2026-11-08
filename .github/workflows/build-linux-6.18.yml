@@ -796,27 +796,37 @@ jobs:
       run: |
         ./build.sh k2b_h618
       if: inputs.mode == 'full'
+      id: haos_build
     - name: Collect artifacts and checksums
       run: |
+        ls -l output/images/
+        (cd output/images && sha256sum haos*.img.xz haos*.raucb > SHA256SUMS.txt && cat SHA256SUMS.txt)
         python3 - <<'PY'
         from pathlib import Path
-        import subprocess
+        import subprocess,hashlib,json,shutil
         root=Path('operating-system/output')
-        dtbs=list((root/'images').rglob('sun50i-h618-k2b.dtb'))
-        assert len(dtbs)==1,dtbs
+        dtbs=sorted((root/'images').rglob('sun50i-h618-k2b.dtb'))
+        assert dtbs,'No built board DTB found'
+        evidence=Path('validation-results/final');evidence.mkdir(parents=True,exist_ok=True)
+        configpath=root/'build/linux-6.18.62/.config'
+        shutil.copyfile(configpath,evidence/'kernel.config')
         node='/soc/i2c@7081400/pmic@36/regulators/dcdc3'
-        for prop in ('regulator-min-microvolt','regulator-max-microvolt'):
-            value=subprocess.check_output(['fdtget','-t','u',str(dtbs[0]),node,prop],text=True).strip()
-            assert value=='1500000',(prop,value)
-        config=(root/'build/linux-6.18.62/.config').read_text()
+        hashes=[]
+        for dtb in dtbs:
+            target=evidence/dtb.relative_to(root/'images');target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(dtb,target)
+            digest=hashlib.sha256(dtb.read_bytes()).hexdigest();hashes.append(digest)
+            for prop in ('regulator-min-microvolt','regulator-max-microvolt'):
+                value=subprocess.check_output(['fdtget','-t','u',str(dtb),node,prop],text=True).strip()
+                assert value=='1500000',(str(dtb),prop,value)
+        assert len(set(hashes))==1,dict(zip(map(str,dtbs),hashes))
+        config=configpath.read_text()
         assert 'CONFIG_MAXIO_PHY=y\n' in config
         assert 'CONFIG_DWMAC_SUN8I=y\n' in config
-        print('Final Buildroot kernel config and DTB sanity checks passed')
+        report={'kernel':'6.18.62','dtbs':dict(zip(map(str,dtbs),hashes)),'ddr3_linux_microvolts':1500000,'maxio_phy':'y','dwmac_sun8i':'y','hardware_boot_verified':False}
+        (evidence/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
+        print('Final Buildroot kernel config and all DTB copies sanity checks passed',json.dumps(report))
         PY
-        ls -l output/images/
-        cd output/images
-        sha256sum haos* > SHA256SUMS.txt
-        cat SHA256SUMS.txt
       if: inputs.mode == 'full'
     - name: Upload images
       uses: actions/upload-artifact@v4
@@ -828,7 +838,15 @@ jobs:
           haos-ace/output/images/SHA256SUMS.txt
         if-no-files-found: error
         retention-days: 14
-      if: inputs.mode == 'full'
+      if: inputs.mode == 'full' && !cancelled() && steps.haos_build.outcome == 'success'
+    - name: Preserve final kernel config and DTB evidence
+      if: always() && inputs.mode == 'full' && steps.haos_build.outcome == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: k2b-linux-6.18.62-final-build-evidence
+        path: haos-ace/validation-results/final/
+        if-no-files-found: warn
+        retention-days: 14
     defaults:
       run:
         working-directory: haos-ace
