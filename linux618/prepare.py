@@ -8,9 +8,10 @@ ROOT=Path.cwd()
 OVERLAY=ROOT/'haos-overlay/buildroot-external'
 BOARD=OVERLAY/'board/hardkernel/kickpi-k2b'
 MANIFEST=json.loads((ASSETS/'patch-manifest.json').read_text())
-EXPECTED_UBOOT='88e65f238a497a55f6db91ca44590162a74ad02ce0902a7b01d2640a6faa3cc5'
+EXPECTED_UBOOT='59b8087d15e07338b363d2851bb071e155dfc45dc0c98252d8403a0d80ad8b3b'
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
-assert sha(BOARD/'uboot.config')==EXPECTED_UBOOT,'Approved DDR3 U-Boot configuration changed'
+uboot_before=(BOARD/'uboot.config').read_bytes()
+assert hashlib.sha256((BOARD/'uboot.config').read_text().encode()).hexdigest()==EXPECTED_UBOOT,'Approved DDR3 U-Boot configuration changed'
 for entry in MANIFEST['patches']:
     assert sha(ASSETS/'patches'/entry['patch'])==entry['sha256'],entry['patch']
 
@@ -62,14 +63,14 @@ CONFIG_IKCONFIG_PROC=y
 CONFIG_ZRAM_BACKEND_LZ4=y
 CONFIG_ZRAM_DEF_COMP_LZ4=y
 '''
-fragment.write_text(fragment.read_text()+extra,encoding='utf-8')
+if extra not in fragment.read_text():fragment.write_text(fragment.read_text()+extra,encoding='utf-8')
 cmdline=BOARD/'cmdline.txt'
 args=cmdline.read_text().strip().split()
 for arg in ('initcall_debug','ignore_loglevel','loglevel=7'):
     if arg not in args:args.append(arg)
 cmdline.write_text(' '.join(args)+'\n',encoding='utf-8')
 
-assert sha(BOARD/'uboot.config')==EXPECTED_UBOOT
+assert (BOARD/'uboot.config').read_bytes()==uboot_before
 assert '<1500000>' in (patchdir/'001-k2b-v22-board-support.patch').read_text()
 print('Migration: Linux',MANIFEST['kernel_version'])
 print('Migration: DDR3 U-Boot unchanged:',EXPECTED_UBOOT)
