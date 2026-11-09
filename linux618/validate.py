@@ -68,6 +68,8 @@ assert getprop(node,'regulator-min-microvolt')=='1500000'
 assert getprop(node,'regulator-max-microvolt')=='1500000'
 assert getprop('/soc/ethernet@5020000','allwinner,rx-delay-ps')=='2000'
 assert getprop('/soc/ethernet@5020000','allwinner,tx-delay-ps')=='700'
+compatible=subprocess.check_output(['fdtget','-t','s',str(dtb),'/soc/ethernet@5020000/mdio/ethernet-phy@0','compatible'],text=True).strip().split()
+assert compatible==['ethernet-phy-id7b74.4411','ethernet-phy-ieee802.3-c22'],compatible
 report={'kernel':version,'source_sha256':actual,'dtb_sha256':hashlib.sha256(dtb.read_bytes()).hexdigest(),'ddr3_linux_microvolts':1500000,'checks':'exact patches, effective config, DTB, changed driver objects and pinned external modules passed','hardware_boot_verified':False}
 result=SOURCE/'validation-results';result.mkdir(exist_ok=True)
 shutil.copyfile(KERNEL/'.config',result/'kernel.config')

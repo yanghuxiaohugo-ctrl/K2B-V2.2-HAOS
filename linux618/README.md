@@ -47,3 +47,9 @@ Use a separate test TF card after identifying it and obtaining explicit user con
 - https://www.kernel.org/releases.json
 - https://github.com/armbian/build/tree/8ddeef322b4706b5be19d0fb7869f107c117666d/patch/kernel/archive/sunxi-6.18
 - https://github.com/home-assistant/buildroot/blob/02f1553a34c2b8f6e432fe4300bfe529897d5f3c/package/linux-headers/Config.in.host
+
+## PHY ID-only field test (2026-11-09)
+
+Field logs show cached PHY ID 0xffff4411, Generic PHY binding and a MAC reset timeout. Only board patch 005 is changed to explicitly declare 0x7b744411 through the standard PHY compatible property. No driver fallback entries are added. This tests a hypothesis; missing RX clock and the underlying reason for the bad ID have not been measured.
+
+Run build-phy-idfix-dtb.yml to compile a DTB using the verified final configuration from run 42506899967, with DTC_FLAGS=-@ matching the delivered image. The build compares every node, property and reservation to that delivered DTB; only the PHY compatible value may differ. It produces a DTB test package, not a full image. Its baseline artifact is pinned by ID and SHA256 and currently expires on 2026-11-22; expired baselines must be restored and hash-verified before future runs. See IDFIX-TEST-INSTRUCTIONS.md for backup, exact target confirmation and hardware acceptance.

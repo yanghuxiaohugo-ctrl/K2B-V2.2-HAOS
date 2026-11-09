@@ -38,8 +38,8 @@
     },
     {
       "patch": "005-k2b-v22-maxio-ethernet-dts.patch",
-      "origin": "same PHY address/reset/RGMII delays as prior approved 005 and Armbian V2",
-      "sha256": "1d82daad9a192fb182f96c86ad089ad46e6e91cae265d9e24cd9988353eb6800",
+      "origin": "Prior approved V2 PHY address/reset/RGMII delays; explicit Maxio 0x7b744411 ID for board reporting cached 0xffff4411",
+      "sha256": "e9374aebfa915978e4925a8dada881da3944175fec070a81fcb0aa313a9fa338",
       "files": [
         "arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts"
       ]

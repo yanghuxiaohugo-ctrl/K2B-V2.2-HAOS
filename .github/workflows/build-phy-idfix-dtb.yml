@@ -1,0 +1,47 @@
+name: K2B V2.2 PHY ID-only DTB test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: k2b-phy-idfix-dtb
+  cancel-in-progress: false
+jobs:
+  dtb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout reviewed board patches
+        uses: actions/checkout@v4
+      - name: Download and verify previously delivered DTB and config
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /repos/yanghuxiaohugo-ctrl/K2B-V2.2-HAOS/actions/artifacts/13632316955/zip > baseline.zip
+          echo '77449c8c1c46b8506c95cbf13c33ace9cbbcaaf33f4c2887510b44874ced376d  baseline.zip' | sha256sum -c -
+          unzip -q baseline.zip -d baseline
+      - name: Install DTB compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu bc bison flex libssl-dev libelf-dev device-tree-compiler
+      - name: Compile DTB and prove only the PHY ID property changed
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 linux618/build-idfix-dtb.py 2>&1 | tee idfix-build.log
+      - name: Upload verified ID-only DTB test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: k2b-v22-linux-6.18.62-phy-idfix-dtb
+          path: idfix-output/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k2b-phy-idfix-build-log
+          path: idfix-build.log
+          if-no-files-found: warn
+          retention-days: 14
