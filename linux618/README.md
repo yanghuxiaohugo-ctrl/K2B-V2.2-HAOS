@@ -53,3 +53,9 @@ Use a separate test TF card after identifying it and obtaining explicit user con
 Field logs show cached PHY ID 0xffff4411, Generic PHY binding and a MAC reset timeout. Only board patch 005 is changed to explicitly declare 0x7b744411 through the standard PHY compatible property. No driver fallback entries are added. This tests a hypothesis; missing RX clock and the underlying reason for the bad ID have not been measured.
 
 Run build-phy-idfix-dtb.yml to compile a DTB using the verified final configuration from run 42506899967, with DTC_FLAGS=-@ matching the delivered image. The build compares every node, property and reservation to that delivered DTB; only the PHY compatible value may differ. It produces a DTB test package, not a full image. Its baseline artifact is pinned by ID and SHA256 and currently expires on 2026-11-22; expired baselines must be restored and hash-verified before future runs. See IDFIX-TEST-INSTRUCTIONS.md for backup, exact target confirmation and hardware acceptance.
+
+## Field result and full-image packaging (2026-11-09)
+
+The ID-only DTB (SHA256 4491fc352ddb23720a87d970d0d1502d96561745e998cfd2b48526945b989b41) was tested on K2B V2.2. The recorded boot log shows Maxio MAE0621A-Q2C binding, vendor initialization, no prior DMA reset failure, and 1Gbps/full link. The field report also records DHCP and HTTP 200 on port 8123. This validates the board-specific ID declaration as a working fix. It does not measure the post-initialization physical ID registers or the RX clock signal.
+
+The full workflow now verifies the PHY compatible in every final DTB and records whether its hash is identical to the tested DTB. Full-image artifacts carry the phy-idfix suffix to distinguish them from the earlier baseline. Recheck a newly flashed full image before treating it as a hardware-accepted delivery.

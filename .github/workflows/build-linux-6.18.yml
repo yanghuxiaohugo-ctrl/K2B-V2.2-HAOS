@@ -819,11 +819,14 @@ jobs:
             for prop in ('regulator-min-microvolt','regulator-max-microvolt'):
                 value=subprocess.check_output(['fdtget','-t','u',str(dtb),node,prop],text=True).strip()
                 assert value=='1500000',(str(dtb),prop,value)
+            phy='/soc/ethernet@5020000/mdio/ethernet-phy@0'
+            compatible=subprocess.check_output(['fdtget','-t','s',str(dtb),phy,'compatible'],text=True).strip().split()
+            assert compatible==['ethernet-phy-id7b74.4411','ethernet-phy-ieee802.3-c22'],(str(dtb),compatible)
         assert len(set(hashes))==1,dict(zip(map(str,dtbs),hashes))
         config=configpath.read_text()
         assert 'CONFIG_MAXIO_PHY=y\n' in config
         assert 'CONFIG_DWMAC_SUN8I=y\n' in config
-        report={'kernel':'6.18.62','dtbs':dict(zip(map(str,dtbs),hashes)),'ddr3_linux_microvolts':1500000,'maxio_phy':'y','dwmac_sun8i':'y','hardware_boot_verified':False}
+        report={'kernel':'6.18.62','dtbs':dict(zip(map(str,dtbs),hashes)),'ddr3_linux_microvolts':1500000,'maxio_phy':'y','dwmac_sun8i':'y','phy_compatible':compatible,'field_test_dtb_sha256':'4491fc352ddb23720a87d970d0d1502d96561745e998cfd2b48526945b989b41','same_as_field_test_dtb':all(h=='4491fc352ddb23720a87d970d0d1502d96561745e998cfd2b48526945b989b41' for h in hashes),'hardware_boot_verified':False}
         (evidence/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
         print('Final Buildroot kernel config and all DTB copies sanity checks passed',json.dumps(report))
         PY
@@ -831,7 +834,7 @@ jobs:
     - name: Upload images
       uses: actions/upload-artifact@v4
       with:
-        name: haos-k2b-v2.2-ddr3-eth-linux-6.18.62
+        name: haos-k2b-v2.2-ddr3-eth-linux-6.18.62-phy-idfix
         path: |-
           haos-ace/output/images/haos*.img.xz
           haos-ace/output/images/haos*.raucb
@@ -843,7 +846,7 @@ jobs:
       if: always() && inputs.mode == 'full' && steps.haos_build.outcome == 'success'
       uses: actions/upload-artifact@v4
       with:
-        name: k2b-linux-6.18.62-final-build-evidence
+        name: k2b-linux-6.18.62-phy-idfix-final-build-evidence
         path: haos-ace/validation-results/final/
         if-no-files-found: warn
         retention-days: 14
