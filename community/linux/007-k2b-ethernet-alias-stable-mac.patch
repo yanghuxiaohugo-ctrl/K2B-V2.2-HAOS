@@ -1,0 +1,11 @@
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts
+--- a/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts
+@@ -17,6 +17,7 @@
+ 	compatible = "kickpi,kickpi-k2b-v2", "allwinner,sun50i-h618";
+ 	
+ 	aliases {
++		ethernet0 = &emac0;
+ 		serial0 = &uart0;
+ 		mmc0 = &mmc0;
+ 		mmc1 = &mmc1;

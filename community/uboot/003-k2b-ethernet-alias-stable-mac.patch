@@ -1,0 +1,11 @@
+diff --git a/dts/upstream/src/arm64/allwinner/sun50i-h618-k2b.dts b/dts/upstream/src/arm64/allwinner/sun50i-h618-k2b.dts
+--- a/dts/upstream/src/arm64/allwinner/sun50i-h618-k2b.dts
++++ b/dts/upstream/src/arm64/allwinner/sun50i-h618-k2b.dts
+@@ -17,6 +17,7 @@
+ 	compatible = "xunlong,orangepi-zero2w", "allwinner,sun50i-h618";
+ 
+ 	aliases {
++		ethernet0 = &emac0;
+ 		serial0 = &uart0;
+ 	};
+ 

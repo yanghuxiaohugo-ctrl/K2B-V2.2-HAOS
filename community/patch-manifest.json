@@ -1,0 +1,66 @@
+{
+  "kernel_version": "6.18.62",
+  "kernel_sha256": "490a7aedf1b355c565d3a6c05333ccccb5da82064eca46b590448a7099d7d651",
+  "armbian_commit": "8ddeef322b4706b5be19d0fb7869f107c117666d",
+  "patches": [
+    {
+      "patch": "001-k2b-v22-board-support.patch",
+      "origin": "previous board DTS, reviewed against Armbian V2; Linux DDR3 rail corrected to 1500000uV",
+      "sha256": "3636a1ba0215da6fdbf12e806de22eabeba9f27dbbe705e56ec1fd5258dfa224",
+      "files": [
+        "arch/arm64/boot/dts/allwinner/Makefile",
+        "arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts"
+      ]
+    },
+    {
+      "patch": "002-h616-usb-shared-reset.patch",
+      "origin": "armbian\\patches.armbian\\drv-phy-sun4i-usb-Allow-reset-line-to-be-shared.patch",
+      "sha256": "eaa2afe4bc3b74cc806e28a6735a5f566af2b8fe4f2fad7c14ac4c833ef719fa",
+      "files": [
+        "drivers/phy/allwinner/phy-sun4i-usb.c"
+      ]
+    },
+    {
+      "patch": "003-sun8i-emac-reset-on-open.patch",
+      "origin": "armbian\\patches.armbian\\drv-net-stmmac-dwmac-sun8i-reset-emac-on-open.patch",
+      "sha256": "e9c7befb6bc82f5e6f64f042ad7a63f8f07c1e67eae4f7c5982edf58cc8b3451",
+      "files": [
+        "drivers/net/ethernet/stmicro/stmmac/dwmac-sun8i.c"
+      ]
+    },
+    {
+      "patch": "004-stmmac-maxio-phy-init.patch",
+      "origin": "armbian\\patches.armbian\\drv-net-phy-add-maxio-mae0621-phy-driver.patch",
+      "sha256": "47596166d5f37e9de07547baeae52c0755e803b5a75e4daa4a8b786979fbe2d0",
+      "files": [
+        "drivers/net/ethernet/stmicro/stmmac/stmmac_main.c"
+      ]
+    },
+    {
+      "patch": "005-k2b-v22-maxio-ethernet-dts.patch",
+      "origin": "Prior approved V2 PHY address/reset/RGMII delays; explicit Maxio 0x7b744411 ID for board reporting cached 0xffff4411",
+      "sha256": "e9374aebfa915978e4925a8dada881da3944175fec070a81fcb0aa313a9fa338",
+      "files": [
+        "arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts"
+      ]
+    },
+    {
+      "patch": "006-maxio-6.18-driver.patch",
+      "origin": "Armbian Maxio driver plus explicit delay-mode fix, freshly diffed against Linux 6.18.62",
+      "sha256": "3fc3b07c0ffa81b0e977e377f3338ab168adb522afcd46b2cdbb3d0b0c5f3c40",
+      "files": [
+        "drivers/net/phy/Kconfig",
+        "drivers/net/phy/Makefile",
+        "drivers/net/phy/maxio.c"
+      ]
+    },
+    {
+      "patch": "007-k2b-ethernet-alias-stable-mac.patch",
+      "origin": "Community test candidate: Linux ethernet0 alias paired with U-Boot control-tree alias; hardware validation pending",
+      "sha256": "bd9b6debc489632eacafa6bc794e8fce9c13f0919cb24a18755bd81b9d6885da",
+      "files": [
+        "arch/arm64/boot/dts/allwinner/sun50i-h618-k2b.dts"
+      ]
+    }
+  ]
+}
