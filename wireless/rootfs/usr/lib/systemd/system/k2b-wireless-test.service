@@ -1,0 +1,13 @@
+[Unit]
+Description=K2B SWT6621S experimental wireless initialization
+After=systemd-modules-load.service
+Before=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/k2b-wireless-test
+RemainAfterExit=yes
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

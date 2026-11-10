@@ -6,7 +6,7 @@ ROOT=Path.cwd();external=ROOT/'operating-system/buildroot-external'
 board=external/'board/hardkernel/kickpi-k2b'
 folder=Path(os.environ['RUNNER_TEMP'])/'k2b-community-uboot';folder.mkdir(exist_ok=True)
 archive=folder/'u-boot-2025.01.tar.bz2'
-with urlopen('https://ftp.denx.de/pub/u-boot/u-boot-2025.01.tar.bz2',timeout=90) as remote,archive.open('wb') as target:shutil.copyfileobj(remote,target)
+with urlopen('https://sources.buildroot.net/uboot/u-boot-2025.01.tar.bz2',timeout=90) as remote,archive.open('wb') as target:shutil.copyfileobj(remote,target)
 with archive.open('rb') as source:assert hashlib.file_digest(source,'sha256').hexdigest()=='cdef7d507c93f1bbd9f015ea9bc21fa074268481405501945abc6f854d5b686f'
 with tarfile.open(archive) as tar:tar.extractall(folder,filter='data')
 uboot=folder/'u-boot-2025.01'

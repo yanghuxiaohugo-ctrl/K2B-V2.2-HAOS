@@ -1,0 +1,8 @@
+#!/bin/sh
+# Independent experiment. Failure does not require or restart wired networking.
+set -eu
+printf '%s\n' 'k2b-wireless-test: loading SWT6621S hypothesis; availability requires hardware validation'
+modprobe skw_sdio_lite
+modprobe swt6621s_wifi
+modprobe skwbt
+printf '%s\n' 'k2b-wireless-test: three modules requested; verify SDIO, wlan and HCI separately'
