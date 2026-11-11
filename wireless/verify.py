@@ -45,9 +45,10 @@ else:
         file=files[0];vermagic=subprocess.check_output(['modinfo','-F','vermagic',str(file)],text=True).strip();assert vermagic.startswith('6.18.62'),vermagic
         result.append({'name':name,'path':str(file.relative_to(target)),'vermagic':vermagic,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
     manifest=json.loads((evidence/'source-manifest.json').read_text())
-    for file in manifest['files']:
-        if file['path'].startswith('rootfs-overlay/lib/firmware/'):
-            path=target/file['path'].removeprefix('rootfs-overlay/');assert hashlib.sha256(path.read_bytes()).hexdigest()==file['sha256'],str(path)
+    firmware=[file for file in manifest['files'] if file['path'].startswith('rootfs-overlay/usr/lib/firmware/')]
+    assert len(firmware)==16,('Expected all 16 pinned firmware files',len(firmware))
+    for file in firmware:
+        path=target/file['path'].removeprefix('rootfs-overlay/');assert hashlib.sha256(path.read_bytes()).hexdigest()==file['sha256'],str(path)
     assert (target/'usr/lib/systemd/system/multi-user.target.wants/k2b-wireless-test.service').is_symlink()
     for dtb in (output/'images').rglob('sun50i-h618-k2b.dtb'):dtb_checks(dtb)
     report={'stage':'full build modules linked, installed and verified','modules':result,'driver_version':'1.0.3','firmware_verified':True,'hardware_verified':False,'sdio_id_hypothesis':'1ffe:6621','public_release_created':False}

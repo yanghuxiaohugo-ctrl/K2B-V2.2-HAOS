@@ -44,7 +44,7 @@ def prepare(root,cache):
     expected='59b8087d15e07338b363d2851bb071e155dfc45dc0c98252d8403a0d80ad8b3b'
     assert sha((board/'uboot.config').read_text().encode())==expected,'DDR3 configuration changed'
     package=external/'package/k2b-swt6621s';payload=package/'payload';payload.mkdir(parents=True,exist_ok=True)
-    firmware=external/'rootfs-overlay/lib/firmware';firmware.mkdir(parents=True,exist_ok=True)
+    firmware=external/'rootfs-overlay/usr/lib/firmware';firmware.mkdir(parents=True,exist_ok=True)
     extracted=[]
     for name,expected_sha in PACKAGES.items():
         path=download(cache,name,expected_sha)
@@ -106,6 +106,10 @@ CONFIG_PWRSEQ_SIMPLE=y
     for relative in ('usr/libexec/k2b-wireless-test','usr/lib/systemd/system/k2b-wireless-test.service'):
         target=overlay/relative;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ASSETS/'rootfs'/relative,target)
         target.chmod(0o755 if relative.endswith('k2b-wireless-test') else 0o644)
+    # Buildroot merged-/usr overlay sanity check: never create physical /lib.
+    for name in ('bin','sbin','lib','lib32','lib64'):
+        entry=overlay/name
+        assert not entry.exists() or entry.is_symlink(),f'Overlay must use merged /usr: {entry}'
     wants=overlay/'usr/lib/systemd/system/multi-user.target.wants';wants.mkdir(parents=True,exist_ok=True)
     link=wants/'k2b-wireless-test.service'
     if not link.exists():link.symlink_to('../k2b-wireless-test.service')
